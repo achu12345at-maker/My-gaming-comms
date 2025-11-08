@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Secure P2P Call - Gaming UI (Low-Bandwidth)</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Load Google Font for Gaming UI -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" rel="stylesheet">
+    
+    <style>
+        /* Base styles */
+        body {
+            font-family: 'Share Tech Mono', monospace;
+            /* Dark, tech-style gradient background */
+            background: #0a0f18 radial-gradient(circle at top left, #1e293b 0%, #0a0f18 40%);
+            background-attachment: fixed;
+            color: #f3f4f6; /* Gray-100 */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 16px;
+        }
+        /* Hide scrollbars */
+        ::-webkit-scrollbar { display: none; }
+        
+        /* Video elements */
+        video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transform: scaleX(-1); /* Mirror local video */
+            border-radius: 4px;
+        }
+        #remoteVideo {
+            transform: scaleX(1); /* Don't mirror remote video */
+        }
+
+        /* New Neon/Gaming Button Styles */
+        .btn {
+            @apply font-semibold py-2 px-4 rounded-md uppercase tracking-wider text-sm
+                   border transition duration-200 ease-in-out
+                   disabled:opacity-40 disabled:text-gray-500 disabled:border-gray-600;
+        }
+        .btn:not(:disabled):hover {
+            @apply shadow-lg text-black;
+        }
+
+        /* Green / Join */
+        .btn-green {
+            @apply border-green-500 text-green-400;
+        }
+        .btn-green:not(:disabled):hover {
+            @apply bg-green-500 shadow-green-500/30;
+        }
+
+        /* Blue / Create */
+        .btn-blue {
+            @apply border-blue-500 text-blue-400;
+        }
+        .btn-blue:not(:disabled):hover {
+            @apply bg-blue-500 shadow-blue-500/30;
+        }
+
+        /* Red / Hangup / Mute-Active */
+        .btn-red {
+            @apply border-red-500 text-red-400;
+        }
+        .btn-red:not(:disabled):hover {
+            @apply bg-red-500 shadow-red-500/30;
+        }
+
+        /* Gray / Toggle / Copy */
+        .btn-gray {
+            @apply border-gray-500 text-gray-400;
+        }
+        .btn-gray:not(:disabled):hover {
+            @apply bg-gray-500 shadow-gray-500/30;
+        }
+
+        /* Custom Input Style */
+        .input-gaming {
+            @apply flex-grow p-2 bg-gray-800 text-gray-200 rounded-l-lg 
+                   border border-gray-600 focus:outline-none 
+                   focus:ring-1 focus:ring-cyan-500 focus:border-cyan-500;
+        }
+    </style>
+</head>
+<body class="font-mono">
+
+    <!-- Main UI Panel: Semi-transparent with neon border -->
+    <div class="w-full max-w-lg bg-gray-900 bg-opacity-80 backdrop-blur-sm border border-cyan-500/50 shadow-2xl shadow-cyan-500/10 rounded-lg p-6">
+        
+        <!-- Header -->
+        <div class="text-center mb-6">
+            <h1 class="text-3xl font-bold text-cyan-400 uppercase tracking-widest">P2P Voice</h1>
+            <p class="text-sm text-cyan-200/70">Secure Low-Bandwidth Comms</p>
+        </div>
+
+        <!-- Status & Room ID Display -->
+        <div id="status-bar" class="bg-black/50 p-3 rounded-md text-center mb-4 border border-gray-700 transition-colors duration-300">
+            <span id="status-text" class="text-gray-300 text-sm">Initializing...</span>
+            <div id="room-id-display" class="hidden mt-2">
+                <span class="text-xs text-gray-400">SHARE ROOM ID:</span>
+                <div class="flex mt-1">
+                    <input id="room-id-text" type="text" readonly class="flex-grow p-2 bg-gray-800 text-gray-200 rounded-l-md border border-gray-600 text-sm" />
+                    <button id="copy-btn" class="btn btn-gray rounded-l-none px-3 text-xs">Copy</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Video Feeds -->
+        <div class="grid grid-cols-2 gap-4 mb-6">
+            <!-- Remote Video (Friend) -->
+            <div class="bg-black/70 rounded-md border border-gray-700 overflow-hidden aspect-video">
+                <video id="remoteVideo" autoplay playsinline></video>
+                <div id="remote-placeholder" class="flex items-center justify-center h-full text-gray-500 text-xs p-2">
+                    [REMOTE_FEED]
+                </div>
+            </div>
+            <!-- Local Video (You) -->
+            <div class="bg-black/70 rounded-md border border-gray-700 overflow-hidden aspect-video">
+                <video id="localVideo" autoplay playsinline muted></video>
+                <div id="local-placeholder" class="flex items-center justify-center h-full text-gray-500 text-xs p-2">
+                    [LOCAL_FEED]
+                </div>
+            </div>
+        </div>
+
+        <!-- Controls: Init Screen -->
+        <div id="init-controls" class="flex flex-col sm:flex-row gap-4">
+            <button id="create-room-btn" class="btn btn-blue w-full">[ Create Room ]</button>
+            <div class="flex w-full">
+                <input id="join-room-input" type="text" placeholder="Enter Room ID" class="input-gaming" />
+                <button id="join-room-btn" class="btn btn-green rounded-l-none">[ Join ]</button>
+            </div>
+        </div>
+
+        <!-- Controls: Call Screen -->
+        <div id="call-controls" class="hidden flex justify-center space-x-3">
+            <button id="toggle-mic-btn" class="btn btn-gray w-1/3">[ Mute ]</button>
+            <!-- This is the low-bandwidth button! -->
+            <button id="toggle-video-btn" class="btn btn-gray w-1/3">[ Video Off ]</button>
+            <button id="hangup-btn" class="btn btn-red w-1/3">[ End Call ]</button>
+        </div>
+
+        <!-- Custom Modal for Errors/Info -->
+        <div id="modal" class="hidden fixed inset-0 bg-black bg-opacity-80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+            <div class="bg-gray-900 rounded-lg p-6 max-w-sm w-full text-gray-200 border border-cyan-500/50 shadow-lg shadow-cyan-500/10">
+                <h3 id="modal-title" class="text-lg font-bold mb-4 text-cyan-400"></h3>
+                <p id="modal-text" class="text-sm mb-6"></p>
+                <button id="modal-close-btn" class="btn btn-blue w-full">[ Understood ]</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Firebase SDK Imports (No Changes to Logic) -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, getDoc, addDoc, setDoc, updateDoc, deleteDoc, onSnapshot, collection, query, where, getDocs, writeBatch } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // --- GLOBAL SETUP ---
+
+        // Firebase config and IDs
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-webrtc-app';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+        let db, auth;
+        let localStream, remoteStream;
+        let peerConnection;
+        let currentRoomId;
+
+        // WebRTC STUN servers
+        const servers = {
+            iceServers: [
+                { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] },
+            ],
+            iceCandidatePoolSize: 10,
+        };
+
+        // --- LOW-BANDWIDTH CONSTRAINTS (For 10 Mbps environment, prioritizing game performance) ---
+        const mediaConstraints = {
+            video: {
+                width: { ideal: 320, max: 640 },
+                height: { ideal: 240, max: 480 },
+                frameRate: { ideal: 15, max: 24 } // Low frame rate for less data
+            },
+            audio: true
+        };
+
+        // DOM Elements
+        const localVideo = document.getElementById('localVideo');
+        const remoteVideo = document.getElementById('remoteVideo');
+        const createRoomBtn = document.getElementById('create-room-btn');
+        const joinRoomBtn = document.getElementById('join-room-btn');
+        const joinRoomInput = document.getElementById('join-room-input');
+        const hangupBtn = document.getElementById('hangup-btn');
+        const toggleMicBtn = document.getElementById('toggle-mic-btn');
+        const toggleVideoBtn = document.getElementById('toggle-video-btn');
+        const initControls = document.getElementById('init-controls');
+        const callControls = document.getElementById('call-controls');
+        const statusBar = document.getElementById('status-bar');
+        const statusText = document.getElementById('status-text');
+        const roomIdDisplay = document.getElementById('room-id-display');
+        const roomIdText = document.getElementById('room-id-text');
+        const copyBtn = document.getElementById('copy-btn');
+        const localPlaceholder = document.getElementById('local-placeholder');
+        const remotePlaceholder = document.getElementById('remote-placeholder');
+
+        // Modal Elements
+        const modal = document.getElementById('modal');
+        const modalTitle = document.getElementById('modal-title');
+        const modalText = document.getElementById('modal-text');
+        const modalCloseBtn = document.getElementById('modal-close-btn');
+        modalCloseBtn.onclick = () => modal.classList.add('hidden');
+
+        function showModal(title, text) {
+            modalTitle.textContent = `[ ${title} ]`;
+            modalText.textContent = text;
+            modal.classList.remove('hidden');
+        }
+
+        // --- FIREBASE INITIALIZATION AND AUTH ---
+
+        async function initFirebase() {
+            if (!firebaseConfig) {
+                showModal("Connection Error", "Firebase configuration is missing. App cannot start.");
+                return;
+            }
+            try {
+                const app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
+
+                if (initialAuthToken) {
+                    await signInWithCustomToken(auth, initialAuthToken);
+                } else {
+                    await signInAnonymously(auth);
+                }
+                statusText.textContent = "Status: Ready";
+            } catch (error) {
+                console.error("Firebase Init Error:", error);
+                statusText.textContent = "Status: Auth Failed";
+                showModal("Authentication Error", `Failed to connect to services: ${error.message}`);
+            }
+        }
+
+        // Helper to get the main collection path
+        function getRoomsCollection() {
+            return collection(db, `/artifacts/${appId}/public/data/webrtc_rooms`);
+        }
+
+        // --- CORE WEBRTC & SIGNALING LOGIC ---
+
+        async function startMedia() {
+            try {
+                localStream = await navigator.mediaDevices.getUserMedia(mediaConstraints);
+                localVideo.srcObject = localStream;
+                localPlaceholder.classList.add('hidden');
+            } catch (error) {
+                console.error("Could not start media:", error);
+                showModal("Media Error", `Could not access your camera or microphone. Please check permissions. (${error.name})`);
+                throw error;
+            }
+        }
+
+        function setupPeerConnection(roomId) {
+            peerConnection = new RTCPeerConnection(servers);
+
+            localStream.getTracks().forEach(track => {
+                peerConnection.addTrack(track, localStream);
+            });
+
+            peerConnection.ontrack = event => {
+                if (!remoteStream) {
+                    remoteStream = new MediaStream();
+                }
+                event.streams[0].getTracks().forEach(track => {
+                    remoteStream.addTrack(track);
+                });
+                remoteVideo.srcObject = remoteStream;
+                remotePlaceholder.classList.add('hidden');
+            };
+
+            currentRoomId = roomId;
+            roomIdText.value = roomId;
+            roomIdDisplay.classList.remove('hidden');
+            initControls.classList.add('hidden');
+            callControls.classList.remove('hidden');
+            // Update status bar with neon green border
+            statusBar.classList.remove('border-gray-700');
+            statusBar.classList.add('border-green-500');
+            statusText.textContent = "Status: Call Active";
+        }
+
+        // 1. Logic for Creating a Room
+        createRoomBtn.onclick = async () => {
+            await startMedia();
+            
+            const roomRef = doc(getRoomsCollection());
+            const offerCandidatesCol = collection(roomRef, 'offerCandidates');
+            const answerCandidatesCol = collection(roomRef, 'answerCandidates');
+            
+            currentRoomId = roomRef.id;
+            setupPeerConnection(currentRoomId);
+            
+            statusText.textContent = "Status: Creating Room...";
+
+            peerConnection.onicecandidate = event => {
+                if (event.candidate) {
+                    addDoc(offerCandidatesCol, event.candidate.toJSON());
+                }
+            };
+
+            const offerDescription = await peerConnection.createOffer();
+            await peerConnection.setLocalDescription(offerDescription);
+
+            const offer = {
+                sdp: offerDescription.sdp,
+                type: offerDescription.type,
+            };
+            await setDoc(roomRef, { offer });
+
+            onSnapshot(roomRef, (snapshot) => {
+                const data = snapshot.data();
+                if (!peerConnection.currentRemoteDescription && data?.answer) {
+                    statusText.textContent = "Status: Connecting...";
+                    const answerDescription = new RTCSessionDescription(data.answer);
+                    peerConnection.setRemoteDescription(answerDescription);
+                }
+            });
+
+            onSnapshot(answerCandidatesCol, (snapshot) => {
+                snapshot.docChanges().forEach((change) => {
+                    if (change.type === 'added') {
+                        const candidate = new RTCIceCandidate(change.doc.data());
+                        peerConnection.addIceCandidate(candidate);
+                    }
+                });
+            });
+        };
+
+        // 2. Logic for Joining a Room
+        joinRoomBtn.onclick = async () => {
+            const roomId = joinRoomInput.value.trim();
+            if (!roomId) {
+                showModal("Input Error", "Please enter a valid Room ID.");
+                return;
+            }
+
+            await startMedia();
+
+            const roomRef = doc(getRoomsCollection(), roomId);
+            const offerCandidatesCol = collection(roomRef, 'offerCandidates');
+            const answerCandidatesCol = collection(roomRef, 'answerCandidates');
+
+            const roomSnapshot = await getDoc(roomRef);
+            if (!roomSnapshot.exists()) {
+                showModal("Connection Error", "Room does not exist. Please check the ID.");
+                return;
+            }
+
+            setupPeerConnection(roomId);
+            statusText.textContent = "Status: Joining Room...";
+
+            peerConnection.onicecandidate = event => {
+                if (event.candidate) {
+                    addDoc(answerCandidatesCol, event.candidate.toJSON());
+                }
+            };
+
+            const offer = roomSnapshot.data().offer;
+            await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
+
+            const answerDescription = await peerConnection.createAnswer();
+            await peerConnection.setLocalDescription(answerDescription);
+
+            const answer = {
+                type: answerDescription.type,
+                sdp: answerDescription.sdp,
+            };
+            await updateDoc(roomRef, { answer });
+
+            onSnapshot(offerCandidatesCol, (snapshot) => {
+                snapshot.docChanges().forEach((change) => {
+                    if (change.type === 'added') {
+                        const candidate = new RTCIceCandidate(change.doc.data());
+                        peerConnection.addIceCandidate(candidate);
+                    }
+                });
+            });
+        };
+
+        // --- IN-CALL CONTROLS ---
+
+        // 3. Hangup Logic
+        hangupBtn.onclick = async () => {
+            if (localStream) {
+                localStream.getTracks().forEach(track => track.stop());
+            }
+            if (remoteStream) {
+                remoteStream.getTracks().forEach(track => track.stop());
+            }
+            if (peerConnection) {
+                peerConnection.close();
+            }
+
+            if (currentRoomId) {
+                const roomRef = doc(getRoomsCollection(), currentRoomId);
+                const offerCandidates = await getDocs(collection(roomRef, 'offerCandidates'));
+                const answerCandidates = await getDocs(collection(roomRef, 'answerCandidates'));
+                
+                const batch = writeBatch(db);
+                offerCandidates.forEach(doc => batch.delete(doc.ref));
+                answerCandidates.forEach(doc => batch.delete(doc.ref));
+                batch.delete(roomRef);
+                
+                await batch.commit();
+            }
+            location.reload();
+        };
+
+        // 4. Mute/Unmute Microphone
+        toggleMicBtn.onclick = () => {
+            if (!localStream) return;
+            const audioTrack = localStream.getAudioTracks()[0];
+            if (audioTrack) {
+                audioTrack.enabled = !audioTrack.enabled;
+                toggleMicBtn.textContent = audioTrack.enabled ? "[ Mute ]" : "[ Unmute ]";
+                // Toggle between gray (off) and red (on/muted)
+                toggleMicBtn.classList.toggle('btn-gray');
+                toggleMicBtn.classList.toggle('btn-red');
+            }
+        };
+
+        // 5. Toggle Video (Low-Bandwidth Mode)
+        toggleVideoBtn.onclick = () => {
+            if (!localStream) return;
+            const videoTrack = localStream.getVideoTracks()[0];
+            if (videoTrack) {
+                videoTrack.enabled = !videoTrack.enabled;
+                toggleVideoBtn.textContent = videoTrack.enabled ? "[ Video Off ]" : "[ Video On ]";
+                // Toggle between gray (on) and red (off)
+                toggleVideoBtn.classList.toggle('btn-gray');
+                toggleVideoBtn.classList.toggle('btn-red');
+            }
+        };
+        
+        // 6. Copy Room ID
+        copyBtn.onclick = () => {
+            roomIdText.select();
+            try {
+                document.execCommand('copy');
+                copyBtn.textContent = "Copied!";
+                setTimeout(() => { copyBtn.textContent = "Copy"; }, 2000);
+            } catch (err) {
+                console.error("Failed to copy text: ", err);
+                showModal("Error", "Failed to copy. Please copy the ID manually.");
+            }
+        };
+
+        // --- STARTUP ---
+        window.onload = initFirebase;
+
+    </script>
+</body>
+</html>
